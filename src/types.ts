@@ -35,10 +35,18 @@ export type GameSettings = {
   level: LearningLevel;
 };
 
+export type AudioSettings = {
+  seEnabled: boolean;
+  bgmEnabled: boolean;
+};
+
 export type QuizResult = {
   correctCount: number;
   totalQuestions: number;
+  totalAttempts: number;
   elapsedSeconds: number;
+  score: number;
+  maxCombo: number;
 };
 
 export type SelectOption<T extends string> = {

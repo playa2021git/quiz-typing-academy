@@ -1,4 +1,5 @@
 import type {
+  AudioSettings,
   EnglishLevel,
   GameSettings,
   HistoryGeographyLevel,
@@ -9,9 +10,11 @@ import type {
 } from '../types';
 
 type StartScreenProps = {
+  audioSettings: AudioSettings;
   settings: GameSettings;
   onSettingsChange: (settings: GameSettings) => void;
   onStart: () => void;
+  onToggleAudio: (settings: AudioSettings) => void;
 };
 
 const subjectOptions: SelectOption<Subject>[] = [
@@ -47,9 +50,11 @@ const getLevelOptions = (subject: Subject): SelectOption<LearningLevel>[] =>
   subject === 'english' ? englishLevelOptions : gradeLevelOptions;
 
 export default function StartScreen({
+  audioSettings,
   settings,
   onSettingsChange,
   onStart,
+  onToggleAudio,
 }: StartScreenProps) {
   const levelOptions = getLevelOptions(settings.subject);
 
@@ -61,15 +66,21 @@ export default function StartScreen({
 
   return (
     <main className="screen start-screen">
-      <section className="hero-panel" aria-labelledby="app-title">
-        <p className="eyebrow">Quiz × Typing × Learning</p>
-        <h1 id="app-title">Quiz Typing Academy</h1>
+      <section className="hero-panel boot-panel" aria-labelledby="app-title">
+        <p className="eyebrow">QUIZ × TYPING × LEARNING</p>
+        <h1 id="app-title">QUIZ TYPING ACADEMY</h1>
         <p className="lead">
-          表示された文章を写すだけではなく、クイズの答えを考えてタイピングする学習ゲームです。
+          ANSWER THE QUIZ. STRIKE THE KEYS. CLEAR THE STAGE.
         </p>
+        <p className="press-start">PRESS START</p>
       </section>
 
-      <section className="settings-panel" aria-label="ゲーム設定">
+      <section className="settings-panel command-panel" aria-label="ゲーム設定">
+        <div className="panel-header">
+          <span>MISSION CONFIG</span>
+          <span>READY</span>
+        </div>
+
         <div className="setting-group">
           <span className="setting-label">Subject</span>
           <div className="segmented-grid">
@@ -120,8 +131,29 @@ export default function StartScreen({
           </select>
         </label>
 
+        <div className="audio-control-grid" aria-label="音声設定">
+          <button
+            className={audioSettings.seEnabled ? 'sound-toggle active' : 'sound-toggle'}
+            onClick={() =>
+              onToggleAudio({ ...audioSettings, seEnabled: !audioSettings.seEnabled })
+            }
+            type="button"
+          >
+            SE {audioSettings.seEnabled ? 'ON' : 'OFF'}
+          </button>
+          <button
+            className={audioSettings.bgmEnabled ? 'sound-toggle active' : 'sound-toggle'}
+            onClick={() =>
+              onToggleAudio({ ...audioSettings, bgmEnabled: !audioSettings.bgmEnabled })
+            }
+            type="button"
+          >
+            BGM {audioSettings.bgmEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+
         <button className="primary-button start-button" onClick={onStart} type="button">
-          Start Quiz
+          START GAME
         </button>
       </section>
     </main>
