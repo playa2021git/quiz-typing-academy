@@ -4,7 +4,7 @@ const difficulties: TypingDifficulty[] = ['easy', 'normal', 'hard', 'nightmare']
 
 const answerAliases: Record<string, string[]> = {
   縄文土器: ['じょうもんどき', 'joumondoki', 'jomon doki'],
-  弥生時代: ['弥生', 'やよいじだい', 'やよい', 'yayoijidai', 'yayoi jidai', 'yayoi'],
+  弥生時代: ['やよいじだい', 'yayoijidai', 'yayoi jidai'],
   古墳: ['こふん', 'kofun'],
   十七条の憲法: [
     '憲法十七条',
@@ -90,7 +90,7 @@ const questionBanks: QuestionBank[] = [
     level: 'grade1',
     seeds: [
       { prompt: '縄文時代に多く作られた、厚手で縄目の模様がある土器は？', answer: '縄文土器' },
-      { prompt: '稲作が広まった時代は？', answer: '弥生時代', acceptableAnswers: ['弥生時代', '弥生'] },
+      { prompt: '稲作が広まった時代は？', answer: '弥生時代' },
       { prompt: '大仙古墳のような大きな墓を何という？', answer: '古墳' },
       { prompt: '聖徳太子が定めた役人の心構えは？', answer: '十七条の憲法' },
       { prompt: '奈良時代に都がおかれた場所は？', answer: '平城京' },

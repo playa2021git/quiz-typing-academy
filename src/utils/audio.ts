@@ -104,28 +104,53 @@ export const playResultSound = () => {
   });
 };
 
+const playBgmTone = (
+  context: AudioContext,
+  frequency: number,
+  duration: number,
+  type: OscillatorKind,
+  volume: number,
+  delay = 0,
+) => {
+  if (!bgmGain) {
+    return;
+  }
+
+  const startTime = context.currentTime + delay;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  gain.gain.setValueAtTime(0.001, startTime);
+  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+  oscillator.connect(gain);
+  gain.connect(bgmGain);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.025);
+};
+
 const playBgmStep = () => {
   const context = getAudioContext();
   if (!context || !bgmGain) {
     return;
   }
 
-  const notes = [196, 247, 294, 370, 330, 294, 247, 220];
-  const frequency = notes[bgmStep % notes.length];
-  const startTime = context.currentTime;
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
+  // 短い低音パルスと高音リードを重ね、軽いレースゲーム風の疾走感を出します。
+  const leadNotes = [392, 494, 587, 659, 784, 659, 587, 494, 440, 554, 659, 740, 880, 740, 659, 554];
+  const bassNotes = [98, 98, 123, 123, 147, 147, 123, 123];
+  const leadFrequency = leadNotes[bgmStep % leadNotes.length];
+  const bassFrequency = bassNotes[bgmStep % bassNotes.length];
 
-  oscillator.type = bgmStep % 2 === 0 ? 'triangle' : 'sine';
-  oscillator.frequency.setValueAtTime(frequency, startTime);
-  gain.gain.setValueAtTime(0.001, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.09, startTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.28);
+  playBgmTone(context, bassFrequency, 0.14, 'square', 0.055);
+  playBgmTone(context, leadFrequency, 0.11, bgmStep % 4 === 0 ? 'sawtooth' : 'triangle', 0.075, 0.015);
 
-  oscillator.connect(gain);
-  gain.connect(bgmGain);
-  oscillator.start(startTime);
-  oscillator.stop(startTime + 0.32);
+  if (bgmStep % 8 === 6) {
+    playBgmTone(context, leadFrequency * 1.5, 0.07, 'triangle', 0.045, 0.075);
+  }
+
   bgmStep += 1;
 };
 
@@ -138,7 +163,7 @@ export const startBgm = async () => {
   stopBgm();
   bgmStep = 0;
   playBgmStep();
-  bgmTimerId = window.setInterval(playBgmStep, 360);
+  bgmTimerId = window.setInterval(playBgmStep, 150);
 };
 
 export const stopBgm = () => {
