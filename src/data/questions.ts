@@ -2,6 +2,62 @@ import type { LearningLevel, Question, Subject, TypingDifficulty } from '../type
 
 const difficulties: TypingDifficulty[] = ['easy', 'normal', 'hard', 'nightmare'];
 
+const answerAliases: Record<string, string[]> = {
+  縄文土器: ['じょうもんどき', 'joumondoki', 'jomon doki'],
+  弥生時代: ['弥生', 'やよいじだい', 'やよい', 'yayoijidai', 'yayoi jidai', 'yayoi'],
+  古墳: ['こふん', 'kofun'],
+  十七条の憲法: ['17条の憲法', 'じゅうしちじょうのけんぽう', 'juushichijounokenpou'],
+  平城京: ['へいじょうきょう', 'heijoukyou', 'heijokyo'],
+  平安京: ['へいあんきょう', 'heiankyou', 'heiankyo'],
+  鎌倉幕府: ['かまくらばくふ', 'kamakurabakufu', 'kamakura bakufu'],
+  元寇: ['げんこう', 'genkou', 'genko'],
+  室町幕府: ['むろまちばくふ', 'muromachibakufu', 'muromachi bakufu'],
+  鉄砲: ['てっぽう', 'teppou', 'teppo'],
+  桶狭間の戦い: ['おけはざまのたたかい', 'okehazamanotatakai', 'okehazama'],
+  太閤検地: ['たいこうけんち', 'taikoukenchi', 'taikokenchi'],
+  徳川家康: ['とくがわいえやす', 'tokugawaieyasu', 'ieyasu'],
+  武家諸法度: ['ぶけしょはっと', 'bukeshohatto'],
+  踏絵: ['踏み絵', 'ふみえ', 'fumie'],
+  浦賀: ['うらが', 'uraga'],
+  日米和親条約: ['にちべいわしんじょうやく', 'nichibeiwashinjouyaku'],
+  士族: ['しぞく', 'shizoku'],
+  地租改正: ['ちそかいせい', 'chisokaisei'],
+  西郷隆盛: ['さいごうたかもり', 'saigoutakamori', 'saigotakamori'],
+  下関条約: ['しものせきじょうやく', 'shimonosekijouyaku'],
+  ポーツマス条約: ['ぽーつますじょうやく', 'portsmouth', 'portsmouth treaty'],
+  国際連盟: ['こくさいれんめい', 'kokusairenmei', 'league of nations'],
+  国際連合: ['こくさいれんごう', 'kokusairengou', 'united nations', 'un'],
+  北海道: ['ほっかいどう', 'hokkaidou', 'hokkaido'],
+  富士山: ['ふじさん', 'fujisan', 'fuji'],
+  太平洋: ['たいへいよう', 'taiheiyou', 'pacific ocean'],
+  日本海: ['にほんかい', 'nihonkai', 'sea of japan'],
+  東京: ['東京都', 'とうきょう', 'tokyo'],
+  札幌: ['札幌市', 'さっぽろ', 'sapporo'],
+  信濃川: ['しなのがわ', 'shinanogawa', 'shinano river'],
+  琵琶湖: ['びわこ', 'biwako', 'lake biwa'],
+  福岡県: ['福岡', 'ふくおか', 'fukuoka'],
+  那覇市: ['那覇', 'なは', 'naha'],
+  北京: ['ぺきん', 'beijing', 'pekin'],
+  ソウル: ['seoul'],
+  キャンベラ: ['canberra'],
+  ブラジリア: ['brasilia'],
+  ナイル川: ['ないるがわ', 'nile', 'nile river'],
+  スイス: ['switzerland', 'suisse'],
+  ロシア: ['russia'],
+  アフリカ大陸: ['アフリカ', 'africa'],
+  ニューデリー: ['new delhi', 'newdelhi'],
+  太平洋ベルト: ['たいへいようべると', 'taiheiyouberuto', 'pacific belt'],
+  過密: ['かみつ', 'kamitsu'],
+  過疎: ['かそ', 'kaso'],
+  熱帯雨林気候: ['ねったいうりんきこう', 'nettaiurinkikou', 'tropical rainforest climate'],
+  灌漑: ['かんがい', 'kangai', 'irrigation'],
+  ドーナツ化現象: ['どーなつかげんしょう', 'donutsuka', 'donut phenomenon'],
+  縮尺: ['しゅくしゃく', 'shukushaku'],
+  貿易: ['ぼうえき', 'boueki', 'boeki', 'trade'],
+  持続可能な社会: ['じぞくかのうなしゃかい', 'jizokukanounashakai', 'sustainable society'],
+  グローバル化: ['ぐろーばるか', 'globalization', 'globalisation'],
+};
+
 type QuestionSeed = {
   prompt: string;
   answer: string;
@@ -235,6 +291,11 @@ const toQuestionId = (
   index: number,
 ) => `${subject}-${level}-${difficulty}-${String(index + 1).padStart(3, '0')}`;
 
+const getAcceptableAnswers = (seed: QuestionSeed) => {
+  const aliases = answerAliases[seed.answer] ?? [];
+  return Array.from(new Set([...(seed.acceptableAnswers ?? [seed.answer]), ...aliases]));
+};
+
 export const questions: Question[] = questionBanks.flatMap((bank) =>
   difficulties.flatMap((difficulty) =>
     bank.seeds.map((seed, index) => ({
@@ -244,7 +305,7 @@ export const questions: Question[] = questionBanks.flatMap((bank) =>
       difficulty,
       prompt: seed.prompt,
       answer: seed.answer,
-      acceptableAnswers: seed.acceptableAnswers ?? [seed.answer],
+      acceptableAnswers: getAcceptableAnswers(seed),
       hint: seed.hint,
     })),
   ),
