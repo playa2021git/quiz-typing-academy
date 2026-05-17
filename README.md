@@ -37,6 +37,18 @@ npm run build
 
 生成物は `dist/` に出力されます。`vite.config.ts` の `base` はGitHub Pagesのプロジェクトページ向けに `/quiz-typing-academy/` を設定しています。
 
+## Public URL
+
+GitHub Pagesでの公開URLは次を想定しています。
+
+https://playa2021git.github.io/quiz-typing-academy/
+
+## Deploy
+
+`main` ブランチにpushすると、GitHub Actionsが自動で `npm ci` と `npm run build` を実行し、`dist/` をGitHub Pagesへデプロイします。
+
+初回だけ、GitHubリポジトリの Settings > Pages > Build and deployment で Source を `GitHub Actions` に設定してください。
+
 ## Project Structure
 
 ```text
