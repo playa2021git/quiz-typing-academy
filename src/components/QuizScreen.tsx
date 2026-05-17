@@ -92,7 +92,7 @@ export default function QuizScreen({
   );
   const stageLabel = `${currentIndex + 1}/${questions.length}`;
   const displayLengthClass =
-    answerInput.length > 18 ? ' compact' : answerInput.length > 8 ? ' mid' : '';
+    answerInput.length > 11 ? ' compact' : answerInput.length > 7 ? ' mid' : '';
 
   const accuracy = useMemo(() => {
     const totalKeyCount = acceptedKeyCount + missKeyCount;

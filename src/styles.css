@@ -477,6 +477,7 @@ input:focus {
   padding: clamp(20px, 4vw, 44px);
   position: relative;
   text-align: center;
+  white-space: nowrap;
 }
 
 .typing-display.error {
@@ -527,13 +528,19 @@ input:focus {
 }
 
 .typing-display.mid .typed-char {
-  font-size: clamp(34px, 5.8vw, 78px);
-  min-width: 0.4em;
+  font-size: clamp(36px, 5.6vw, 76px);
+  min-width: 0.34em;
+}
+
+.typing-display.compact {
+  gap: clamp(3px, 0.7vw, 8px);
+  padding-inline: clamp(14px, 3vw, 32px);
 }
 
 .typing-display.compact .typed-char {
-  font-size: clamp(24px, 4.2vw, 54px);
-  min-width: 0.34em;
+  font-size: clamp(26px, 4.6vw, 64px);
+  min-width: 0.28em;
+  padding-inline: 0;
 }
 
 .answer-input {
