@@ -1,5 +1,6 @@
 import {
   ClipboardEvent,
+  CompositionEvent,
   FormEvent,
   KeyboardEvent,
   useEffect,
@@ -30,9 +31,9 @@ type QuizScreenProps = {
 type BattleEffect = 'idle' | 'clear' | 'miss';
 
 const normalizeAnswer = (value: string, difficulty: TypingDifficulty) => {
-  // 難易度ごとに判定の厳しさを変え、英語・日本語の両方を扱えるようにします。
+  // 英単語は大文字小文字を吸収し、前後の空白は判定から外します。
   if (difficulty === 'nightmare') {
-    return value;
+    return value.trim();
   }
 
   const trimmed = value.trim();
@@ -48,19 +49,18 @@ const normalizeAnswer = (value: string, difficulty: TypingDifficulty) => {
   return withoutExtraSpaces.replace(/\s/g, '').toLocaleLowerCase();
 };
 
-const isKeyboardAnswer = (value: string) => /^[\x20-\x7e]+$/.test(value);
-
 const toTypingValue = (value: string, difficulty: TypingDifficulty) => {
   const normalized = normalizeAnswer(value, difficulty);
   return difficulty === 'nightmare' ? normalized : normalized.toLocaleLowerCase();
 };
 
 const getTypingAnswers = (question: Question, difficulty: TypingDifficulty) => {
-  const keyboardAnswers = question.acceptableAnswers.filter(isKeyboardAnswer);
-  const sourceAnswers = keyboardAnswers.length > 0 ? keyboardAnswers : [question.answer];
-
   return Array.from(
-    new Set(sourceAnswers.map((answer) => toTypingValue(answer, difficulty)).filter(Boolean)),
+    new Set(
+      question.acceptableAnswers
+        .map((answer) => toTypingValue(answer, difficulty))
+        .filter(Boolean),
+    ),
   );
 };
 
@@ -94,6 +94,8 @@ const getClearLabel = (combo: number) => {
   return 'CLEAR';
 };
 
+const isPrintableKey = (key: string) => key.length === 1;
+
 export default function QuizScreen({
   audioSettings,
   questions,
@@ -116,7 +118,9 @@ export default function QuizScreen({
   const [missKeyCount, setMissKeyCount] = useState(0);
   const [feedback, setFeedback] = useState('TYPE THE ANSWER');
   const [effect, setEffect] = useState<BattleEffect>('idle');
+  const [isComposing, setIsComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const compositionBaseRef = useRef('');
 
   const currentQuestion = questions[currentIndex];
   const typingAnswers = useMemo(
@@ -124,6 +128,8 @@ export default function QuizScreen({
     [currentQuestion, difficulty],
   );
   const stageLabel = `${currentIndex + 1}/${questions.length}`;
+  const displayLengthClass =
+    answerInput.length > 18 ? ' compact' : answerInput.length > 10 ? ' mid' : '';
 
   const accuracy = useMemo(() => {
     const totalKeyCount = acceptedKeyCount + missKeyCount;
@@ -178,6 +184,51 @@ export default function QuizScreen({
     setAnswerInput('');
     setFeedback('NEXT STAGE READY');
     setIsAdvancing(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const completeAnswer = (
+    completedInput: string,
+    nextAcceptedKeyCount: number,
+    nextMissKeyCount: number,
+  ) => {
+    if (!currentQuestion || isAdvancing) {
+      return;
+    }
+
+    const nextAttemptCount = attemptCount + 1;
+    const nextCorrectCount = correctCount + 1;
+    const nextCombo = combo + 1;
+    const nextMaxCombo = Math.max(maxCombo, nextCombo);
+    const gainedScore = 1000 + nextCombo * 120 + Math.max(0, 60 - elapsedSeconds) * 3;
+    const nextScore = score + gainedScore;
+    const totalKeyCount = nextAcceptedKeyCount + nextMissKeyCount;
+    const nextAccuracy =
+      totalKeyCount === 0 ? 100 : Math.round((nextAcceptedKeyCount / totalKeyCount) * 100);
+
+    setAnswerInput(completedInput);
+    setAttemptCount(nextAttemptCount);
+    setCorrectCount(nextCorrectCount);
+    setCombo(nextCombo);
+    setMaxCombo(nextMaxCombo);
+    setScore(nextScore);
+    setFeedback(getClearLabel(nextCombo));
+    setEffect('clear');
+    setIsAdvancing(true);
+    if (audioSettings.seEnabled) {
+      playCorrectSound();
+    }
+    window.setTimeout(
+      () =>
+        moveToNextQuestion(
+          nextCorrectCount,
+          nextAttemptCount,
+          nextAccuracy,
+          nextScore,
+          nextMaxCombo,
+        ),
+      640,
+    );
   };
 
   const registerMissKey = () => {
@@ -190,13 +241,13 @@ export default function QuizScreen({
     }
   };
 
-  const acceptCharacter = (character: string) => {
+  const acceptText = (text: string, baseInput = answerInput) => {
     if (!currentQuestion || isAdvancing) {
       return;
     }
 
-    const nextCharacter = difficulty === 'nightmare' ? character : character.toLocaleLowerCase();
-    const proposedInput = answerInput + nextCharacter;
+    const nextText = difficulty === 'nightmare' ? text : text.toLocaleLowerCase();
+    const proposedInput = baseInput + nextText;
 
     if (!hasMatchingPrefix(proposedInput, typingAnswers, difficulty)) {
       registerMissKey();
@@ -204,10 +255,15 @@ export default function QuizScreen({
     }
 
     setAnswerInput(proposedInput);
-    setAcceptedKeyCount((count) => count + 1);
+    const nextAcceptedKeyCount = acceptedKeyCount + nextText.length;
+    setAcceptedKeyCount(nextAcceptedKeyCount);
     setFeedback('TYPE THE ANSWER');
     if (audioSettings.seEnabled) {
       playKeySound();
+    }
+
+    if (isCorrectAnswer(proposedInput, typingAnswers, difficulty)) {
+      completeAnswer(proposedInput, nextAcceptedKeyCount, missKeyCount);
     }
   };
 
@@ -219,58 +275,23 @@ export default function QuizScreen({
     }
 
     if (!answerInput) {
-      setFeedback('INPUT REQUIRED');
-      setEffect('miss');
+      setFeedback('TYPE TO START');
       return;
     }
-
-    const nextAttemptCount = attemptCount + 1;
 
     if (isCorrectAnswer(answerInput, typingAnswers, difficulty)) {
-      const nextCorrectCount = correctCount + 1;
-      const nextCombo = combo + 1;
-      const nextMaxCombo = Math.max(maxCombo, nextCombo);
-      const gainedScore = 1000 + nextCombo * 120 + Math.max(0, 60 - elapsedSeconds) * 3;
-      const nextScore = score + gainedScore;
-      const totalKeyCount = acceptedKeyCount + missKeyCount;
-      const nextAccuracy =
-        totalKeyCount === 0 ? 100 : Math.round((acceptedKeyCount / totalKeyCount) * 100);
-
-      setAttemptCount(nextAttemptCount);
-      setCorrectCount(nextCorrectCount);
-      setCombo(nextCombo);
-      setMaxCombo(nextMaxCombo);
-      setScore(nextScore);
-      setFeedback(getClearLabel(nextCombo));
-      setEffect('clear');
-      setIsAdvancing(true);
-      if (audioSettings.seEnabled) {
-        playCorrectSound();
-      }
-      window.setTimeout(
-        () =>
-          moveToNextQuestion(
-            nextCorrectCount,
-            nextAttemptCount,
-            nextAccuracy,
-            nextScore,
-            nextMaxCombo,
-          ),
-        620,
-      );
+      completeAnswer(answerInput, acceptedKeyCount, missKeyCount);
       return;
     }
 
-    setAttemptCount(nextAttemptCount);
-    setCombo(0);
-    setFeedback('MISS / TRY AGAIN');
-    setEffect('miss');
-    if (audioSettings.seEnabled) {
-      playMissSound();
-    }
+    setFeedback('KEEP TYPING');
   };
 
   const handleAnswerKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (isComposing || event.nativeEvent.isComposing) {
+      return;
+    }
+
     if (event.ctrlKey || event.metaKey || event.altKey) {
       return;
     }
@@ -287,15 +308,51 @@ export default function QuizScreen({
       return;
     }
 
-    if (event.key.length === 1) {
+    if (isPrintableKey(event.key)) {
       event.preventDefault();
-      acceptCharacter(event.key);
+      acceptText(event.key);
     }
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
     event.preventDefault();
     registerMissKey();
+  };
+
+  const handleCompositionStart = () => {
+    compositionBaseRef.current = answerInput;
+    setIsComposing(true);
+  };
+
+  const handleCompositionEnd = (event: CompositionEvent<HTMLInputElement>) => {
+    setIsComposing(false);
+
+    const baseInput = compositionBaseRef.current;
+    const composedValue = event.currentTarget.value;
+    const addedText = composedValue.startsWith(baseInput)
+      ? composedValue.slice(baseInput.length)
+      : event.data;
+
+    if (!addedText) {
+      inputRef.current?.focus();
+      return;
+    }
+
+    const proposedInput = baseInput + addedText;
+    if (!hasMatchingPrefix(proposedInput, typingAnswers, difficulty)) {
+      setAnswerInput(baseInput);
+      window.requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.value = baseInput;
+          inputRef.current.focus();
+        }
+      });
+      registerMissKey();
+      return;
+    }
+
+    setAnswerInput(baseInput);
+    window.requestAnimationFrame(() => acceptText(addedText, baseInput));
   };
 
   if (!currentQuestion) {
@@ -313,7 +370,10 @@ export default function QuizScreen({
   }
 
   return (
-    <main className={`screen quiz-screen battle-screen ${effect}`}>
+    <main
+      className={`screen quiz-screen battle-screen ${effect}`}
+      onMouseDown={() => inputRef.current?.focus()}
+    >
       <section className="status-bar hud-bar" aria-label="プレイ状況">
         <div>
           <span className="status-label">SCORE</span>
@@ -351,7 +411,11 @@ export default function QuizScreen({
 
       <form className="answer-form console-panel" onSubmit={handleSubmit}>
         <label htmlFor="answer">INPUT CONSOLE</label>
-        <div className={effect === 'miss' ? 'typing-display error' : 'typing-display'}>
+        <div
+          className={`typing-display${displayLengthClass} ${effect === 'miss' ? 'error' : ''} ${
+            effect === 'clear' ? 'complete' : ''
+          }`}
+        >
           {answerInput ? (
             Array.from(answerInput).map((char, index) => (
               <span
@@ -363,7 +427,7 @@ export default function QuizScreen({
               </span>
             ))
           ) : (
-            <span className="typing-guide">TYPE YOUR ANSWER...</span>
+            <span className="typing-guide">TYPE YOUR ANSWER</span>
           )}
         </div>
         <input
@@ -371,18 +435,22 @@ export default function QuizScreen({
           autoComplete="off"
           className="answer-input"
           id="answer"
+          inputMode="text"
+          onCompositionEnd={handleCompositionEnd}
+          onCompositionStart={handleCompositionStart}
           onKeyDown={handleAnswerKeyDown}
-          onChange={() => undefined}
+          onChange={(event) => {
+            if (isComposing) {
+              setAnswerInput(event.target.value);
+            }
+          }}
           onPaste={handlePaste}
-          placeholder="正しいキーだけ入力されます / Enterで判定"
+          placeholder="TYPE"
           ref={inputRef}
           type="text"
           value={answerInput}
         />
         <div className="button-row">
-          <button className="primary-button" disabled={isAdvancing} type="submit">
-            EXECUTE
-          </button>
           <button className="secondary-button" onClick={onRestart} type="button">
             QUIT
           </button>
