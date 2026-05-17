@@ -3,11 +3,20 @@ import QuizScreen from './components/QuizScreen';
 import ResultScreen from './components/ResultScreen';
 import StartScreen from './components/StartScreen';
 import { getQuestionsForSettings } from './data/questions';
-import type { AudioSettings, GameScreen, GameSettings, Question, QuizResult } from './types';
+import { translate } from './i18n';
+import type {
+  AudioSettings,
+  GameScreen,
+  GameSettings,
+  Language,
+  Question,
+  QuizResult,
+} from './types';
 import {
   initializeAudio,
   playResultSound,
   playStartSound,
+  playToggleSound,
   startBgm,
   stopBgm,
 } from './utils/audio';
@@ -29,6 +38,7 @@ export default function App() {
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [startedAt, setStartedAt] = useState(Date.now());
   const [result, setResult] = useState<QuizResult | null>(null);
+  const [language, setLanguage] = useState<Language>('ja');
   const [audioSettings, setAudioSettings] = useState<AudioSettings>({
     seEnabled: false,
     bgmEnabled: false,
@@ -51,22 +61,34 @@ export default function App() {
       return;
     }
 
-    startBgm();
+    void startBgm();
     return stopBgm;
   }, [audioSettings.bgmEnabled, audioUnlocked]);
 
   const updateAudioSettings = async (nextSettings: AudioSettings) => {
-    const shouldUnlockAudio =
-      screen !== 'start' &&
-      !audioUnlocked &&
-      (nextSettings.seEnabled || nextSettings.bgmEnabled);
+    const isTurningSeOn = !audioSettings.seEnabled && nextSettings.seEnabled;
+    const isTurningBgmOn = !audioSettings.bgmEnabled && nextSettings.bgmEnabled;
+    const shouldUnlockAudio = nextSettings.seEnabled || nextSettings.bgmEnabled;
 
     if (shouldUnlockAudio) {
-      await initializeAudio();
-      setAudioUnlocked(true);
+      const isReady = await initializeAudio();
+      setAudioUnlocked(isReady);
+      if (isReady && isTurningSeOn) {
+        playToggleSound();
+      }
+    } else {
+      setAudioUnlocked(false);
+    }
+
+    if (!nextSettings.bgmEnabled) {
+      stopBgm();
     }
 
     setAudioSettings(nextSettings);
+
+    if (isTurningBgmOn) {
+      void startBgm();
+    }
   };
 
   const startQuiz = async () => {
@@ -123,7 +145,9 @@ export default function App() {
       <QuizScreen
         audioSettings={audioSettings}
         difficulty={settings.difficulty}
+        language={language}
         onFinish={finishQuiz}
+        onLanguageChange={setLanguage}
         onRestart={resetToStart}
         onToggleAudio={updateAudioSettings}
         questions={activeQuestions}
@@ -136,7 +160,9 @@ export default function App() {
     return (
       <ResultScreen
         audioSettings={audioSettings}
+        language={language}
         onBackToTitle={resetToStart}
+        onLanguageChange={setLanguage}
         onRetry={startQuiz}
         onToggleAudio={updateAudioSettings}
         result={result}
@@ -148,13 +174,16 @@ export default function App() {
     <>
       <StartScreen
         audioSettings={audioSettings}
+        language={language}
         settings={settings}
+        onLanguageChange={setLanguage}
         onSettingsChange={setSettings}
         onStart={startQuiz}
         onToggleAudio={updateAudioSettings}
       />
       <p className="question-stock" aria-live="polite">
-        この設定では {availableQuestionCount} 問から10問を出題します。
+        {translate(language, 'questionStockPrefix')} {availableQuestionCount}{' '}
+        {translate(language, 'questionStockSuffix')}
       </p>
     </>
   );

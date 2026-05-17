@@ -3,55 +3,68 @@ import type {
   EnglishLevel,
   GameSettings,
   HistoryGeographyLevel,
+  Language,
   LearningLevel,
   SelectOption,
   Subject,
   TypingDifficulty,
 } from '../types';
+import { translate, type TranslationKey } from '../i18n';
+import LanguageSwitch from './LanguageSwitch';
 
 type StartScreenProps = {
   audioSettings: AudioSettings;
+  language: Language;
   settings: GameSettings;
+  onLanguageChange: (language: Language) => void;
   onSettingsChange: (settings: GameSettings) => void;
   onStart: () => void;
   onToggleAudio: (settings: AudioSettings) => void;
 };
 
-const subjectOptions: SelectOption<Subject>[] = [
-  { value: 'history', label: 'History' },
-  { value: 'geography', label: 'Geography' },
-  { value: 'english', label: 'English Vocabulary' },
+const subjectOptions: Array<SelectOption<Subject> & { labelKey: TranslationKey }> = [
+  { value: 'history', label: 'History', labelKey: 'history' },
+  { value: 'geography', label: 'Geography', labelKey: 'geography' },
+  { value: 'english', label: 'English Vocabulary', labelKey: 'english' },
 ];
 
-const difficultyOptions: SelectOption<TypingDifficulty>[] = [
-  { value: 'easy', label: 'Easy' },
-  { value: 'normal', label: 'Normal' },
-  { value: 'hard', label: 'Hard' },
-  { value: 'nightmare', label: 'Nightmare' },
+const difficultyOptions: Array<
+  SelectOption<TypingDifficulty> & { labelKey: TranslationKey }
+> = [
+  { value: 'easy', label: 'Easy', labelKey: 'easy' },
+  { value: 'normal', label: 'Normal', labelKey: 'normal' },
+  { value: 'hard', label: 'Hard', labelKey: 'hard' },
+  { value: 'nightmare', label: 'Nightmare', labelKey: 'nightmare' },
 ];
 
-const gradeLevelOptions: SelectOption<HistoryGeographyLevel>[] = [
-  { value: 'grade1', label: 'Grade 1' },
-  { value: 'grade2', label: 'Grade 2' },
-  { value: 'grade3', label: 'Grade 3' },
+const gradeLevelOptions: Array<
+  SelectOption<HistoryGeographyLevel> & { labelKey: TranslationKey }
+> = [
+  { value: 'grade1', label: 'Grade 1', labelKey: 'grade1' },
+  { value: 'grade2', label: 'Grade 2', labelKey: 'grade2' },
+  { value: 'grade3', label: 'Grade 3', labelKey: 'grade3' },
 ];
 
-const englishLevelOptions: SelectOption<EnglishLevel>[] = [
-  { value: 'eiken5', label: 'Eiken 5' },
-  { value: 'eiken4', label: 'Eiken 4' },
-  { value: 'eiken3', label: 'Eiken 3' },
-  { value: 'eikenPre2', label: 'Eiken Pre-2' },
-  { value: 'eiken2', label: 'Eiken 2' },
-  { value: 'eikenPre1', label: 'Eiken Pre-1' },
-  { value: 'eiken1', label: 'Eiken 1' },
+const englishLevelOptions: Array<SelectOption<EnglishLevel> & { labelKey: TranslationKey }> = [
+  { value: 'eiken5', label: 'Eiken 5', labelKey: 'eiken5' },
+  { value: 'eiken4', label: 'Eiken 4', labelKey: 'eiken4' },
+  { value: 'eiken3', label: 'Eiken 3', labelKey: 'eiken3' },
+  { value: 'eikenPre2', label: 'Eiken Pre-2', labelKey: 'eikenPre2' },
+  { value: 'eiken2', label: 'Eiken 2', labelKey: 'eiken2' },
+  { value: 'eikenPre1', label: 'Eiken Pre-1', labelKey: 'eikenPre1' },
+  { value: 'eiken1', label: 'Eiken 1', labelKey: 'eiken1' },
 ];
 
-const getLevelOptions = (subject: Subject): SelectOption<LearningLevel>[] =>
+const getLevelOptions = (
+  subject: Subject,
+): Array<SelectOption<LearningLevel> & { labelKey: TranslationKey }> =>
   subject === 'english' ? englishLevelOptions : gradeLevelOptions;
 
 export default function StartScreen({
   audioSettings,
+  language,
   settings,
+  onLanguageChange,
   onSettingsChange,
   onStart,
   onToggleAudio,
@@ -67,22 +80,22 @@ export default function StartScreen({
   return (
     <main className="screen start-screen">
       <section className="hero-panel boot-panel" aria-labelledby="app-title">
-        <p className="eyebrow">QUIZ × TYPING × LEARNING</p>
+        <p className="eyebrow">{translate(language, 'quizTypingLearning')}</p>
         <h1 id="app-title">QUIZ TYPING ACADEMY</h1>
-        <p className="lead">
-          ANSWER THE QUIZ. STRIKE THE KEYS. CLEAR THE STAGE.
-        </p>
-        <p className="press-start">PRESS START</p>
+        <p className="lead">{translate(language, 'bootLead')}</p>
+        <p className="press-start">{translate(language, 'pressStart')}</p>
       </section>
 
       <section className="settings-panel command-panel" aria-label="ゲーム設定">
         <div className="panel-header">
-          <span>MISSION CONFIG</span>
-          <span>READY</span>
+          <span>{translate(language, 'missionConfig')}</span>
+          <span>{translate(language, 'ready')}</span>
         </div>
 
+        <LanguageSwitch language={language} onLanguageChange={onLanguageChange} />
+
         <div className="setting-group">
-          <span className="setting-label">Subject</span>
+          <span className="setting-label">{translate(language, 'subject')}</span>
           <div className="segmented-grid">
             {subjectOptions.map((option) => (
               <button
@@ -91,14 +104,14 @@ export default function StartScreen({
                 onClick={() => updateSubject(option.value)}
                 type="button"
               >
-                {option.label}
+                {translate(language, option.labelKey)}
               </button>
             ))}
           </div>
         </div>
 
         <div className="setting-group">
-          <span className="setting-label">Typing Difficulty</span>
+          <span className="setting-label">{translate(language, 'typingDifficulty')}</span>
           <div className="segmented-grid four">
             {difficultyOptions.map((option) => (
               <button
@@ -109,14 +122,14 @@ export default function StartScreen({
                 onClick={() => onSettingsChange({ ...settings, difficulty: option.value })}
                 type="button"
               >
-                {option.label}
+                {translate(language, option.labelKey)}
               </button>
             ))}
           </div>
         </div>
 
         <label className="select-row">
-          <span className="setting-label">Learning Level</span>
+          <span className="setting-label">{translate(language, 'learningLevel')}</span>
           <select
             value={settings.level}
             onChange={(event) =>
@@ -125,13 +138,13 @@ export default function StartScreen({
           >
             {levelOptions.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {translate(language, option.labelKey)}
               </option>
             ))}
           </select>
         </label>
 
-        <div className="audio-control-grid" aria-label="音声設定">
+        <div className="audio-control-grid" aria-label={translate(language, 'audioLabel')}>
           <button
             className={audioSettings.seEnabled ? 'sound-toggle active' : 'sound-toggle'}
             onClick={() =>
@@ -139,7 +152,7 @@ export default function StartScreen({
             }
             type="button"
           >
-            SE {audioSettings.seEnabled ? 'ON' : 'OFF'}
+            {translate(language, audioSettings.seEnabled ? 'seOn' : 'seOff')}
           </button>
           <button
             className={audioSettings.bgmEnabled ? 'sound-toggle active' : 'sound-toggle'}
@@ -148,12 +161,12 @@ export default function StartScreen({
             }
             type="button"
           >
-            BGM {audioSettings.bgmEnabled ? 'ON' : 'OFF'}
+            {translate(language, audioSettings.bgmEnabled ? 'bgmOn' : 'bgmOff')}
           </button>
         </div>
 
         <button className="primary-button start-button" onClick={onStart} type="button">
-          START GAME
+          {translate(language, 'startGame')}
         </button>
       </section>
     </main>

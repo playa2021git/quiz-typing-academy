@@ -8,14 +8,18 @@ let bgmStep = 0;
 
 const getAudioContext = () => {
   const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    return null;
+  }
+
   if (!audioContext) {
     audioContext = new AudioContextConstructor();
     masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.18;
+    masterGain.gain.value = 0.36;
     masterGain.connect(audioContext.destination);
 
     bgmGain = audioContext.createGain();
-    bgmGain.gain.value = 0.08;
+    bgmGain.gain.value = 0.14;
     bgmGain.connect(masterGain);
   }
 
@@ -30,8 +34,12 @@ const playTone = (
   delay = 0,
 ) => {
   const context = getAudioContext();
-  if (!masterGain) {
+  if (!context || !masterGain) {
     return;
+  }
+
+  if (context.state === 'suspended') {
+    void context.resume();
   }
 
   const startTime = context.currentTime + delay;
@@ -52,41 +60,53 @@ const playTone = (
 
 export const initializeAudio = async () => {
   const context = getAudioContext();
+  if (!context) {
+    return false;
+  }
+
   if (context.state === 'suspended') {
     await context.resume();
   }
+
+  return context.state === 'running';
 };
 
 export const playKeySound = () => {
-  playTone(620 + Math.random() * 90, 0.035, 'square', 0.09);
+  playTone(680 + Math.random() * 110, 0.045, 'square', 0.16);
 };
 
 export const playStartSound = () => {
   [220, 330, 494].forEach((frequency, index) => {
-    playTone(frequency, 0.08, 'sawtooth', 0.14, index * 0.08);
+    playTone(frequency, 0.09, 'sawtooth', 0.2, index * 0.08);
+  });
+};
+
+export const playToggleSound = () => {
+  [660, 880].forEach((frequency, index) => {
+    playTone(frequency, 0.07, 'triangle', 0.18, index * 0.055);
   });
 };
 
 export const playCorrectSound = () => {
   [523, 659, 784, 1046].forEach((frequency, index) => {
-    playTone(frequency, 0.09, 'triangle', 0.18, index * 0.055);
+    playTone(frequency, 0.1, 'triangle', 0.24, index * 0.055);
   });
 };
 
 export const playMissSound = () => {
-  playTone(150, 0.12, 'sawtooth', 0.22);
-  playTone(92, 0.16, 'square', 0.16, 0.08);
+  playTone(150, 0.12, 'sawtooth', 0.28);
+  playTone(92, 0.16, 'square', 0.22, 0.08);
 };
 
 export const playResultSound = () => {
   [392, 523, 659, 784, 988].forEach((frequency, index) => {
-    playTone(frequency, 0.12, 'triangle', 0.16, index * 0.09);
+    playTone(frequency, 0.12, 'triangle', 0.22, index * 0.09);
   });
 };
 
 const playBgmStep = () => {
   const context = getAudioContext();
-  if (!bgmGain) {
+  if (!context || !bgmGain) {
     return;
   }
 
@@ -109,8 +129,14 @@ const playBgmStep = () => {
   bgmStep += 1;
 };
 
-export const startBgm = () => {
+export const startBgm = async () => {
+  const isReady = await initializeAudio();
+  if (!isReady) {
+    return;
+  }
+
   stopBgm();
+  bgmStep = 0;
   playBgmStep();
   bgmTimerId = window.setInterval(playBgmStep, 360);
 };

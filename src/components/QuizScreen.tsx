@@ -8,11 +8,19 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { AudioSettings, Question, TypingDifficulty } from '../types';
+import type { AudioSettings, Language, Question, TypingDifficulty } from '../types';
+import { translate, type TranslationKey } from '../i18n';
 import { playCorrectSound, playKeySound, playMissSound } from '../utils/audio';
+import {
+  getTypingAnswers,
+  hasMatchingTypingPrefix,
+  isCorrectTypingAnswer,
+} from '../utils/answer';
+import LanguageSwitch from './LanguageSwitch';
 
 type QuizScreenProps = {
   audioSettings: AudioSettings;
+  language: Language;
   questions: Question[];
   difficulty: TypingDifficulty;
   startedAt: number;
@@ -24,59 +32,12 @@ type QuizScreenProps = {
     score: number,
     maxCombo: number,
   ) => void;
+  onLanguageChange: (language: Language) => void;
   onRestart: () => void;
   onToggleAudio: (settings: AudioSettings) => void;
 };
 
 type BattleEffect = 'idle' | 'clear' | 'miss';
-
-const normalizeAnswer = (value: string, difficulty: TypingDifficulty) => {
-  // 英単語は大文字小文字を吸収し、前後の空白は判定から外します。
-  if (difficulty === 'nightmare') {
-    return value.trim();
-  }
-
-  const trimmed = value.trim();
-  if (difficulty === 'hard') {
-    return trimmed;
-  }
-
-  const withoutExtraSpaces = trimmed.replace(/\s+/g, ' ');
-  if (difficulty === 'normal') {
-    return withoutExtraSpaces.toLocaleLowerCase();
-  }
-
-  return withoutExtraSpaces.replace(/\s/g, '').toLocaleLowerCase();
-};
-
-const toTypingValue = (value: string, difficulty: TypingDifficulty) => {
-  const normalized = normalizeAnswer(value, difficulty);
-  return difficulty === 'nightmare' ? normalized : normalized.toLocaleLowerCase();
-};
-
-const getTypingAnswers = (question: Question, difficulty: TypingDifficulty) => {
-  return Array.from(
-    new Set(
-      question.acceptableAnswers
-        .map((answer) => toTypingValue(answer, difficulty))
-        .filter(Boolean),
-    ),
-  );
-};
-
-const isCorrectAnswer = (input: string, typingAnswers: string[], difficulty: TypingDifficulty) => {
-  const normalizedInput = toTypingValue(input, difficulty);
-  return typingAnswers.some((answer) => answer === normalizedInput);
-};
-
-const hasMatchingPrefix = (input: string, typingAnswers: string[], difficulty: TypingDifficulty) => {
-  if (!input) {
-    return true;
-  }
-
-  const normalizedInput = toTypingValue(input, difficulty);
-  return typingAnswers.some((answer) => answer.startsWith(normalizedInput));
-};
 
 const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -84,24 +45,26 @@ const formatTime = (seconds: number) => {
   return `${minutes}:${String(restSeconds).padStart(2, '0')}`;
 };
 
-const getClearLabel = (combo: number) => {
+const getClearLabel = (combo: number): TranslationKey => {
   if (combo >= 7) {
-    return 'PERFECT';
+    return 'perfect';
   }
   if (combo >= 3) {
-    return 'GREAT';
+    return 'great';
   }
-  return 'CLEAR';
+  return 'clear';
 };
 
 const isPrintableKey = (key: string) => key.length === 1;
 
 export default function QuizScreen({
   audioSettings,
+  language,
   questions,
   difficulty,
   startedAt,
   onFinish,
+  onLanguageChange,
   onRestart,
   onToggleAudio,
 }: QuizScreenProps) {
@@ -116,7 +79,7 @@ export default function QuizScreen({
   const [maxCombo, setMaxCombo] = useState(0);
   const [acceptedKeyCount, setAcceptedKeyCount] = useState(0);
   const [missKeyCount, setMissKeyCount] = useState(0);
-  const [feedback, setFeedback] = useState('TYPE THE ANSWER');
+  const [feedbackKey, setFeedbackKey] = useState<TranslationKey>('typeAnswer');
   const [effect, setEffect] = useState<BattleEffect>('idle');
   const [isComposing, setIsComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -182,7 +145,7 @@ export default function QuizScreen({
 
     setCurrentIndex((index) => index + 1);
     setAnswerInput('');
-    setFeedback('NEXT STAGE READY');
+    setFeedbackKey('nextStageReady');
     setIsAdvancing(false);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   };
@@ -212,7 +175,7 @@ export default function QuizScreen({
     setCombo(nextCombo);
     setMaxCombo(nextMaxCombo);
     setScore(nextScore);
-    setFeedback(getClearLabel(nextCombo));
+    setFeedbackKey(getClearLabel(nextCombo));
     setEffect('clear');
     setIsAdvancing(true);
     if (audioSettings.seEnabled) {
@@ -234,7 +197,7 @@ export default function QuizScreen({
   const registerMissKey = () => {
     setMissKeyCount((count) => count + 1);
     setCombo(0);
-    setFeedback('MISS / CORRECT KEY REQUIRED');
+    setFeedbackKey('missCorrectKeyRequired');
     setEffect('miss');
     if (audioSettings.seEnabled) {
       playMissSound();
@@ -249,7 +212,7 @@ export default function QuizScreen({
     const nextText = difficulty === 'nightmare' ? text : text.toLocaleLowerCase();
     const proposedInput = baseInput + nextText;
 
-    if (!hasMatchingPrefix(proposedInput, typingAnswers, difficulty)) {
+    if (!hasMatchingTypingPrefix(proposedInput, typingAnswers, difficulty)) {
       registerMissKey();
       return;
     }
@@ -257,12 +220,12 @@ export default function QuizScreen({
     setAnswerInput(proposedInput);
     const nextAcceptedKeyCount = acceptedKeyCount + nextText.length;
     setAcceptedKeyCount(nextAcceptedKeyCount);
-    setFeedback('TYPE THE ANSWER');
+    setFeedbackKey('typeAnswer');
     if (audioSettings.seEnabled) {
       playKeySound();
     }
 
-    if (isCorrectAnswer(proposedInput, typingAnswers, difficulty)) {
+    if (isCorrectTypingAnswer(proposedInput, typingAnswers, difficulty)) {
       completeAnswer(proposedInput, nextAcceptedKeyCount, missKeyCount);
     }
   };
@@ -275,16 +238,16 @@ export default function QuizScreen({
     }
 
     if (!answerInput) {
-      setFeedback('TYPE TO START');
+      setFeedbackKey('typeToStart');
       return;
     }
 
-    if (isCorrectAnswer(answerInput, typingAnswers, difficulty)) {
+    if (isCorrectTypingAnswer(answerInput, typingAnswers, difficulty)) {
       completeAnswer(answerInput, acceptedKeyCount, missKeyCount);
       return;
     }
 
-    setFeedback('KEEP TYPING');
+    setFeedbackKey('keepTyping');
   };
 
   const handleAnswerKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -339,7 +302,7 @@ export default function QuizScreen({
     }
 
     const proposedInput = baseInput + addedText;
-    if (!hasMatchingPrefix(proposedInput, typingAnswers, difficulty)) {
+    if (!hasMatchingTypingPrefix(proposedInput, typingAnswers, difficulty)) {
       setAnswerInput(baseInput);
       window.requestAnimationFrame(() => {
         if (inputRef.current) {
@@ -359,10 +322,10 @@ export default function QuizScreen({
     return (
       <main className="screen quiz-screen">
         <section className="quiz-panel">
-          <h1>NO DATA</h1>
-          <p>この組み合わせの問題データを追加してください。</p>
+          <h1>{translate(language, 'noData')}</h1>
+          <p>{translate(language, 'noDataDescription')}</p>
           <button className="primary-button" onClick={onRestart} type="button">
-            BACK TO TITLE
+            {translate(language, 'backToTitle')}
           </button>
         </section>
       </main>
@@ -376,41 +339,47 @@ export default function QuizScreen({
     >
       <section className="status-bar hud-bar" aria-label="プレイ状況">
         <div>
-          <span className="status-label">SCORE</span>
+          <span className="status-label">{translate(language, 'score')}</span>
           <strong>{score.toLocaleString()}</strong>
         </div>
         <div>
-          <span className="status-label">COMBO</span>
+          <span className="status-label">{translate(language, 'combo')}</span>
           <strong>{combo}</strong>
         </div>
         <div>
-          <span className="status-label">ACCURACY</span>
+          <span className="status-label">{translate(language, 'accuracy')}</span>
           <strong>{accuracy}%</strong>
         </div>
         <div>
-          <span className="status-label">TIME</span>
+          <span className="status-label">{translate(language, 'time')}</span>
           <strong>{formatTime(elapsedSeconds)}</strong>
         </div>
         <div>
-          <span className="status-label">STAGE</span>
+          <span className="status-label">{translate(language, 'stage')}</span>
           <strong>{stageLabel}</strong>
         </div>
       </section>
 
       <section className={`quiz-panel arena-panel ${effect}`} aria-labelledby="question-title">
         <div className="arena-topline">
-          <span>QUESTION NODE {String(currentIndex + 1).padStart(2, '0')}</span>
-          <span>{difficulty.toUpperCase()}</span>
+          <span>
+            {translate(language, 'questionNode')} {String(currentIndex + 1).padStart(2, '0')}
+          </span>
+          <span>{translate(language, difficulty)}</span>
         </div>
         <h1 id="question-title">{currentQuestion.prompt}</h1>
-        {currentQuestion.hint ? <p className="hint">HINT: {currentQuestion.hint}</p> : null}
+        {currentQuestion.hint ? (
+          <p className="hint">
+            {translate(language, 'hint')}: {currentQuestion.hint}
+          </p>
+        ) : null}
         <div className={`battle-callout ${effect}`} aria-live="polite">
-          {feedback}
+          {translate(language, feedbackKey)}
         </div>
       </section>
 
       <form className="answer-form console-panel" onSubmit={handleSubmit}>
-        <label htmlFor="answer">INPUT CONSOLE</label>
+        <label htmlFor="answer">{translate(language, 'inputConsole')}</label>
         <div
           className={`typing-display${displayLengthClass} ${effect === 'miss' ? 'error' : ''} ${
             effect === 'clear' ? 'complete' : ''
@@ -427,7 +396,7 @@ export default function QuizScreen({
               </span>
             ))
           ) : (
-            <span className="typing-guide">TYPE YOUR ANSWER</span>
+            <span className="typing-guide">{translate(language, 'typeYourAnswer')}</span>
           )}
         </div>
         <input
@@ -452,12 +421,13 @@ export default function QuizScreen({
         />
         <div className="button-row">
           <button className="secondary-button" onClick={onRestart} type="button">
-            QUIT
+            {translate(language, 'quit')}
           </button>
         </div>
       </form>
 
-      <div className="floating-audio-controls" aria-label="音声設定">
+      <div className="floating-audio-controls" aria-label={translate(language, 'audioLabel')}>
+        <LanguageSwitch language={language} onLanguageChange={onLanguageChange} />
         <button
           className={audioSettings.seEnabled ? 'sound-toggle active' : 'sound-toggle'}
           onClick={() =>
@@ -465,7 +435,7 @@ export default function QuizScreen({
           }
           type="button"
         >
-          SE {audioSettings.seEnabled ? 'ON' : 'OFF'}
+          {translate(language, audioSettings.seEnabled ? 'seOn' : 'seOff')}
         </button>
         <button
           className={audioSettings.bgmEnabled ? 'sound-toggle active' : 'sound-toggle'}
@@ -474,7 +444,7 @@ export default function QuizScreen({
           }
           type="button"
         >
-          BGM {audioSettings.bgmEnabled ? 'ON' : 'OFF'}
+          {translate(language, audioSettings.bgmEnabled ? 'bgmOn' : 'bgmOff')}
         </button>
       </div>
     </main>

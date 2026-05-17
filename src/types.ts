@@ -18,6 +18,8 @@ export type LearningLevel = HistoryGeographyLevel | EnglishLevel;
 
 export type GameScreen = 'start' | 'quiz' | 'result';
 
+export type Language = 'ja' | 'en';
+
 export type Question = {
   id: string;
   subject: Subject;
