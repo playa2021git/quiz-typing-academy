@@ -41,7 +41,7 @@ export default function ResultScreen({
   onToggleAudio,
 }: ResultScreenProps) {
   // 結果画面ではゲームらしいランクと、学習の振り返りに必要な指標を並べます。
-  const accuracy = Math.round((result.correctCount / Math.max(1, result.totalAttempts)) * 100);
+  const accuracy = result.accuracy;
   const averageSeconds = result.elapsedSeconds / result.totalQuestions;
   const rank = getRank(accuracy, result.maxCombo);
 

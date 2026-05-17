@@ -92,12 +92,14 @@ export default function App() {
   const finishQuiz = (
     correctCount: number,
     totalAttempts: number,
+    accuracy: number,
     elapsedSeconds: number,
     score: number,
     maxCombo: number,
   ) => {
     setResult({
       correctCount,
+      accuracy,
       elapsedSeconds,
       maxCombo,
       score,

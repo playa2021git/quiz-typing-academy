@@ -44,6 +44,7 @@ export type QuizResult = {
   correctCount: number;
   totalQuestions: number;
   totalAttempts: number;
+  accuracy: number;
   elapsedSeconds: number;
   score: number;
   maxCombo: number;

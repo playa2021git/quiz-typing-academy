@@ -1,4 +1,12 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ClipboardEvent,
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { AudioSettings, Question, TypingDifficulty } from '../types';
 import { playCorrectSound, playKeySound, playMissSound } from '../utils/audio';
 
@@ -10,6 +18,7 @@ type QuizScreenProps = {
   onFinish: (
     correctCount: number,
     totalAttempts: number,
+    accuracy: number,
     elapsedSeconds: number,
     score: number,
     maxCombo: number,
@@ -39,30 +48,34 @@ const normalizeAnswer = (value: string, difficulty: TypingDifficulty) => {
   return withoutExtraSpaces.replace(/\s/g, '').toLocaleLowerCase();
 };
 
-const isCorrectAnswer = (
-  input: string,
-  acceptableAnswers: string[],
-  difficulty: TypingDifficulty,
-) => {
-  const normalizedInput = normalizeAnswer(input, difficulty);
-  return acceptableAnswers.some(
-    (answer) => normalizeAnswer(answer, difficulty) === normalizedInput,
+const isKeyboardAnswer = (value: string) => /^[\x20-\x7e]+$/.test(value);
+
+const toTypingValue = (value: string, difficulty: TypingDifficulty) => {
+  const normalized = normalizeAnswer(value, difficulty);
+  return difficulty === 'nightmare' ? normalized : normalized.toLocaleLowerCase();
+};
+
+const getTypingAnswers = (question: Question, difficulty: TypingDifficulty) => {
+  const keyboardAnswers = question.acceptableAnswers.filter(isKeyboardAnswer);
+  const sourceAnswers = keyboardAnswers.length > 0 ? keyboardAnswers : [question.answer];
+
+  return Array.from(
+    new Set(sourceAnswers.map((answer) => toTypingValue(answer, difficulty)).filter(Boolean)),
   );
 };
 
-const hasMatchingPrefix = (
-  input: string,
-  acceptableAnswers: string[],
-  difficulty: TypingDifficulty,
-) => {
+const isCorrectAnswer = (input: string, typingAnswers: string[], difficulty: TypingDifficulty) => {
+  const normalizedInput = toTypingValue(input, difficulty);
+  return typingAnswers.some((answer) => answer === normalizedInput);
+};
+
+const hasMatchingPrefix = (input: string, typingAnswers: string[], difficulty: TypingDifficulty) => {
   if (!input) {
     return true;
   }
 
-  const normalizedInput = normalizeAnswer(input, difficulty);
-  return acceptableAnswers.some((answer) =>
-    normalizeAnswer(answer, difficulty).startsWith(normalizedInput),
-  );
+  const normalizedInput = toTypingValue(input, difficulty);
+  return typingAnswers.some((answer) => answer.startsWith(normalizedInput));
 };
 
 const formatTime = (seconds: number) => {
@@ -99,22 +112,26 @@ export default function QuizScreen({
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
+  const [acceptedKeyCount, setAcceptedKeyCount] = useState(0);
+  const [missKeyCount, setMissKeyCount] = useState(0);
   const [feedback, setFeedback] = useState('TYPE THE ANSWER');
   const [effect, setEffect] = useState<BattleEffect>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const currentQuestion = questions[currentIndex];
+  const typingAnswers = useMemo(
+    () => (currentQuestion ? getTypingAnswers(currentQuestion, difficulty) : []),
+    [currentQuestion, difficulty],
+  );
   const stageLabel = `${currentIndex + 1}/${questions.length}`;
-  const isInputAligned = currentQuestion
-    ? hasMatchingPrefix(answerInput, currentQuestion.acceptableAnswers, difficulty)
-    : true;
 
   const accuracy = useMemo(() => {
-    if (attemptCount === 0) {
+    const totalKeyCount = acceptedKeyCount + missKeyCount;
+    if (totalKeyCount === 0) {
       return 100;
     }
-    return Math.round((correctCount / attemptCount) * 100);
-  }, [attemptCount, correctCount]);
+    return Math.round((acceptedKeyCount / totalKeyCount) * 100);
+  }, [acceptedKeyCount, missKeyCount]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -140,6 +157,7 @@ export default function QuizScreen({
   const moveToNextQuestion = (
     nextCorrectCount: number,
     nextAttemptCount: number,
+    nextAccuracy: number,
     nextScore: number,
     nextMaxCombo: number,
   ) => {
@@ -148,6 +166,7 @@ export default function QuizScreen({
       onFinish(
         nextCorrectCount,
         nextAttemptCount,
+        nextAccuracy,
         Math.max(1, Math.floor((Date.now() - startedAt) / 1000)),
         nextScore,
         nextMaxCombo,
@@ -161,11 +180,35 @@ export default function QuizScreen({
     setIsAdvancing(false);
   };
 
-  const handleInputChange = (value: string) => {
-    if (value.length > answerInput.length && audioSettings.seEnabled) {
+  const registerMissKey = () => {
+    setMissKeyCount((count) => count + 1);
+    setCombo(0);
+    setFeedback('MISS / CORRECT KEY REQUIRED');
+    setEffect('miss');
+    if (audioSettings.seEnabled) {
+      playMissSound();
+    }
+  };
+
+  const acceptCharacter = (character: string) => {
+    if (!currentQuestion || isAdvancing) {
+      return;
+    }
+
+    const nextCharacter = difficulty === 'nightmare' ? character : character.toLocaleLowerCase();
+    const proposedInput = answerInput + nextCharacter;
+
+    if (!hasMatchingPrefix(proposedInput, typingAnswers, difficulty)) {
+      registerMissKey();
+      return;
+    }
+
+    setAnswerInput(proposedInput);
+    setAcceptedKeyCount((count) => count + 1);
+    setFeedback('TYPE THE ANSWER');
+    if (audioSettings.seEnabled) {
       playKeySound();
     }
-    setAnswerInput(value);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -183,12 +226,15 @@ export default function QuizScreen({
 
     const nextAttemptCount = attemptCount + 1;
 
-    if (isCorrectAnswer(answerInput, currentQuestion.acceptableAnswers, difficulty)) {
+    if (isCorrectAnswer(answerInput, typingAnswers, difficulty)) {
       const nextCorrectCount = correctCount + 1;
       const nextCombo = combo + 1;
       const nextMaxCombo = Math.max(maxCombo, nextCombo);
       const gainedScore = 1000 + nextCombo * 120 + Math.max(0, 60 - elapsedSeconds) * 3;
       const nextScore = score + gainedScore;
+      const totalKeyCount = acceptedKeyCount + missKeyCount;
+      const nextAccuracy =
+        totalKeyCount === 0 ? 100 : Math.round((acceptedKeyCount / totalKeyCount) * 100);
 
       setAttemptCount(nextAttemptCount);
       setCorrectCount(nextCorrectCount);
@@ -202,7 +248,14 @@ export default function QuizScreen({
         playCorrectSound();
       }
       window.setTimeout(
-        () => moveToNextQuestion(nextCorrectCount, nextAttemptCount, nextScore, nextMaxCombo),
+        () =>
+          moveToNextQuestion(
+            nextCorrectCount,
+            nextAttemptCount,
+            nextAccuracy,
+            nextScore,
+            nextMaxCombo,
+          ),
         620,
       );
       return;
@@ -218,12 +271,31 @@ export default function QuizScreen({
   };
 
   const handleAnswerKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
       return;
     }
 
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+      return;
+    }
+
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      setAnswerInput((input) => input.slice(0, -1));
+      return;
+    }
+
+    if (event.key.length === 1) {
+      event.preventDefault();
+      acceptCharacter(event.key);
+    }
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
     event.preventDefault();
-    event.currentTarget.form?.requestSubmit();
+    registerMissKey();
   };
 
   if (!currentQuestion) {
@@ -279,11 +351,11 @@ export default function QuizScreen({
 
       <form className="answer-form console-panel" onSubmit={handleSubmit}>
         <label htmlFor="answer">INPUT CONSOLE</label>
-        <div className={isInputAligned ? 'typing-display' : 'typing-display error'}>
+        <div className={effect === 'miss' ? 'typing-display error' : 'typing-display'}>
           {answerInput ? (
             Array.from(answerInput).map((char, index) => (
               <span
-                className={isInputAligned ? 'typed-char valid' : 'typed-char invalid'}
+                className="typed-char valid"
                 key={`${char}-${index}-${answerInput.length}`}
                 style={{ animationDelay: `${Math.min(index, 8) * 12}ms` }}
               >
@@ -300,8 +372,9 @@ export default function QuizScreen({
           className="answer-input"
           id="answer"
           onKeyDown={handleAnswerKeyDown}
-          onChange={(event) => handleInputChange(event.target.value)}
-          placeholder="Enterで判定"
+          onChange={() => undefined}
+          onPaste={handlePaste}
+          placeholder="正しいキーだけ入力されます / Enterで判定"
           ref={inputRef}
           type="text"
           value={answerInput}
